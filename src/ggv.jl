@@ -1,4 +1,4 @@
-struct ParamsGGV <: Params
+struct GGVParams <: Params
     r::Float64                  # weekly interest rate
     δ::Float64                  # exogenous separation
     ψ::Float64                  # total job arrival
@@ -14,7 +14,7 @@ struct ParamsGGV <: Params
     F_grid::Vector{Float64}     # cdf
 end
 
-function ParamsGGV(;r = 0.001, δ = 0.0054, ψ = 0.25, b = 0.4, κ = 0.0, L = 9, σ = 0.05, μ = (-(σ^2))/2, Nw = 500)
+function GGVParams(;r = 0.001, δ = 0.0054, ψ = 0.25, b = 0.4, κ = 0.0, L = 9, σ = 0.05, μ = (-(σ^2))/2, Nw = 500)
     θ = 1/L
     lower = 0.0
     upper = exp(μ + 3σ)
@@ -24,11 +24,11 @@ function ParamsGGV(;r = 0.001, δ = 0.0054, ψ = 0.25, b = 0.4, κ = 0.0, L = 9,
     f_grid = f.(w_grid)
     f_grid = f_grid ./ sum(f_grid)
     F_grid = cumsum(f_grid)
-    return ParamsGGV(r, δ, ψ, b, κ, L, θ, σ, μ, Nw, w_grid, f_grid, F_grid)
+    return GGVParams(r, δ, ψ, b, κ, L, θ, σ, μ, Nw, w_grid, f_grid, F_grid)
 end
 
-mutable struct ModelGGV <: Model
-    p::ParamsGGV
+mutable struct GGVModel <: Model
+    p::GGVParams
 
     # single agents
     U_s::Float64
@@ -47,7 +47,7 @@ mutable struct ModelGGV <: Model
     φ_o::Vector{Int} # reservation function (outside offers)
 end
 
-function ModelGGV(p::ParamsGGV)
+function GGVModel(p::GGVParams)
     @unpack r, κ, Nw, b, w_grid = p
 
     U_s = b / r
@@ -64,10 +64,10 @@ function ModelGGV(p::ParamsGGV)
 
     φ_i = zeros(Int, Nw)
     φ_o = zeros(Int, Nw)
-    return ModelGGV(p, U_s, V_s, w_R_single, U, Ω, T, S, w_R_dual, ŵ_T, ŵ_S, φ_i, φ_o)
+    return GGVModel(p, U_s, V_s, w_R_single, U, Ω, T, S, w_R_dual, ŵ_T, ŵ_S, φ_i, φ_o)
 end
 
-function solve_singles!(m::ModelGGV; Δ=2.0, max_iter = 1_000_000, tol=1e-6, verbose = false)
+function solve_singles!(m::GGVModel; Δ=2.0, max_iter = 1_000_000, tol=1e-6, verbose = false)
     @unpack r, b, δ, ψ, w_grid, f_grid = parameters(m)
     @unpack U_s, V_s = m
     
@@ -102,7 +102,7 @@ function solve_singles!(m::ModelGGV; Δ=2.0, max_iter = 1_000_000, tol=1e-6, ver
     m.w_R_single = index
 end
 
-function solve_dual!(m::ModelGGV; Δ=2.0, max_iter = 100_000, tol=1e-6, verbose = false)
+function solve_dual!(m::GGVModel; Δ=2.0, max_iter = 100_000, tol=1e-6, verbose = false)
     @unpack r, b, δ, ψ, κ, θ, w_grid, f_grid = parameters(m)
     @unpack U, Ω, T, S = m
     U_new = copy(U)
@@ -162,7 +162,7 @@ function solve_dual!(m::ModelGGV; Δ=2.0, max_iter = 100_000, tol=1e-6, verbose 
     m.w_R_dual = index
 end
 
-function solve_double_indifference_points!(m::ModelGGV; verbose = true)
+function solve_double_indifference_points!(m::GGVModel; verbose = true)
     @unpack κ, w_grid, Nw = parameters(m)
     @unpack U, Ω, T, S, w_R_dual = m
 
@@ -179,13 +179,13 @@ function solve_double_indifference_points!(m::ModelGGV; verbose = true)
 
 end
 
-function solve!(m::ModelGGV; Δ=0.04, verbose = true)
+function solve!(m::GGVModel; Δ=0.04, verbose = true)
     solve_singles!(m; Δ, verbose)
     solve_dual!(m; Δ, verbose)
     solve_double_indifference_points!(m; verbose)
 end
 
-function plot_φs(m::ModelGGV)
+function plot_φs(m::GGVModel)
     @unpack κ, w_grid = parameters(m)
     @unpack φ_o, φ_i = m
     p = plot(w_grid, w_grid[φ_o], label="φ_o(w_1)", xlabel="w_1", ylabel="Reservation Wage", title="Reservation Wage Functions (κ = $κ)")
@@ -198,7 +198,7 @@ function plot_φs(m::ModelGGV)
     display(p)
 end
 
-function print_reservations(models::Vector{ModelGGV})
+function print_reservations(models::Vector{GGVModel})
     nts = []
     for m in models
         nt = (; kappa = m.p.κ,
@@ -210,7 +210,7 @@ function print_reservations(models::Vector{ModelGGV})
     println(df)
 end
 
-function print_double_indiff(models::Vector{ModelGGV})
+function print_double_indiff(models::Vector{GGVModel})
     nts = []
     for m in models
         nt = (; kappa = m.p.κ,
@@ -222,7 +222,7 @@ function print_double_indiff(models::Vector{ModelGGV})
     println(df)
 end
 
-# p = ParamsGGV(κ=0.3)
-# m = ModelGGV(p)
+# p = GGVParams(κ=0.3)
+# m = GGVModel(p)
 # solve!(m; Δ=2, verbose = true)
 # # plot_φs(m)
