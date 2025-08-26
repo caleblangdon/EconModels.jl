@@ -8,6 +8,7 @@ using Plots
 using ProgressMeter
 using QuantEcon
 using Statistics
+using StatsBase
 using Tullio
 using UnPack
 using LinearAlgebra
@@ -17,7 +18,7 @@ abstract type Params end
 abstract type Model end
 abstract type EstimationProcedure end
 
-# Example Usage (for model "Type"):
+# Example Usage:
 # p = Params<modelname>()
 # m = Model<modelname>(p)
 # solve!(m)
@@ -25,11 +26,14 @@ abstract type EstimationProcedure end
 parameters(m::Model) = m.p
 
 
-include("ggv.jl")
+include("GGV.jl")
 export GGVParams, GGVModel
 
 include("consumptionsavings.jl")
 export ConsumptionSavingsParams, ConsumptionSavingsModel
+
+include("LS.jl")
+export LSParams, LSModel
 
 function test_func()
     println("Test 10")
