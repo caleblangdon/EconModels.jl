@@ -21,7 +21,7 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 [compat]
 DataFrames = "1.7.0"
 Distributions = "0.25.119"
-Interpolations = "0.15.1"
+Interpolations = "0.15.1, 0.16"
 LinearAlgebra = "1.11.0"
 Optim = "1.12.0"
 Plots = "1.40.13"
