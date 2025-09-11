@@ -1,3 +1,4 @@
+using ConcreteStructs
 using Distributions
 using UnPack
 using ProgressMeter
@@ -5,28 +6,31 @@ using LinearAlgebra
 using StatsBase
 using Base.Threads
 
-struct LSParams{F <: AbstractFloat, VF <: AbstractVector{F}} <: Params
-    β::F
-    α::F
-    λ::F
-    Δ::Int
-    ψ_F::Int
-    ψ_U::Int
-    b::F
+@concrete struct LSParams <: Params
+    β
+    α
+    λ
+    Δ
+    ψ_F
+    ψ_U
+    b
 
-    w_N::Int
-    w_grid::VF
-    f_grid::VF
-    F_grid::VF
+    w_N
+    w_grid # vector (w_N)
+    f_grid # vector (w_N)
+    F_grid # vector (w_N)
 
-    s_N::Int
-    s_grid::VF
+    s_N
+    s_grid # vector (s_N)
 
-    h_N::Int
-    h_grid::VF
+    h_N
+    h_grid # vector (h_N)
 
-    c_grid::VF
-    π_grid::VF
+    c
+    c_grid # vector (s_N)
+
+    π
+    π_grid # vector (s_N)
 end
 
 function LSParams(;
@@ -38,6 +42,7 @@ function LSParams(;
     ψ_U = 10,
     b = 0.1,
 
+    dist = Normal,
     μ_w = 0.5,
     σ_w = sqrt(0.1),
 
@@ -59,34 +64,37 @@ function LSParams(;
 
     w_grid = collect(range(; start=w_low_lim, stop=w_up_lim, length=w_N))
 
-    d = truncated(Normal(μ_w, σ_w), 0.0, 1.0)
+    d = truncated(dist(μ_w, σ_w), 0.0, 1.0)
     f_grid = pdf.(d, w_grid)
     f_grid ./= sum(f_grid)
     F_grid = cumsum(f_grid)
 
     s_grid = collect(range(; start=s_low_lim, stop=s_up_lim, length=s_N))
     h_grid = collect(range(; start=h_low_lim, stop=h_up_lim, length=h_N))
+    
+    c(x) = search_cost_coef * x
+    c_grid = c.(s_grid)
 
-    c_grid = search_cost_coef .* s_grid
-    π_grid = s_grid .^ contact_exp
-    return LSParams(β, α, λ, Δ, ψ_F, ψ_U, b, w_N, w_grid, f_grid, F_grid, s_N, s_grid, h_N, h_grid, c_grid, π_grid)
+    π(x) = x ^ contact_exp
+    π_grid = π.(s_grid)
+    return LSParams(β, α, λ, Δ, ψ_F, ψ_U, b, w_N, w_grid, f_grid, F_grid, s_N, s_grid, h_N, h_grid, c, c_grid, π, π_grid)
 end
 
-mutable struct LSModel{F <: AbstractFloat, VI <: AbstractVector{Int}, VF <: AbstractVector{F}, MF <: AbstractMatrix{F}} <: Model
-    p::LSParams{F, VF}
-    τ::F
-    U::VF
-    optimal_s_idx::VI
-    w_R_idx::VI
-    W::MF
+@concrete mutable struct LSModel{P <: LSParams} <: Model
+    p::P # p will be a concrete instance of LSParams
+    τ
+    U # vector (h_N)
+    optimal_s_idx # vector (h_N)
+    w_R_idx # vector (h_N)
+    W # matrix (w_N, h_N)
 end
 
-function LSModel(p = LSParams())
+function LSModel(p::LSParams = LSParams())
     τ = 0.0
-    U = fill(p.b / (1-p.β), p.h_N)
+    U = fill(p.b / (1-(p.β*(1-p.α))), p.h_N)
     optimal_s_idx = fill(p.s_N, p.h_N)
     w_R_idx = fill(1, p.h_N)
-    @tullio W[wx, hx] := (p.w_grid[wx] * p.h_grid[hx]) / (1-p.β)
+    @tullio W[wx, hx] := (p.w_grid[wx] * p.h_grid[hx]) / (1-(p.β*(1-p.α)))
     return LSModel(p, τ, U, optimal_s_idx, w_R_idx, W)
 end
 
@@ -128,12 +136,12 @@ function solve_value_functions!(m::LSModel; tol = 1e-3, max_iter = 10_000, repor
     end
 end
 
-@kwdef mutable struct LSWorker
-    id::Int = 1
-    alive::Bool = true
-    employed::Bool = false
-    w_idx::Int = 0 # 0 is unemployed
-    h_idx::Int = 1
+@kwdef @concrete mutable struct LSWorker
+    id = 1
+    alive = true
+    employed = false
+    w_idx = 0 # 0 is unemployed
+    h_idx = 1
 end
 
 function step!(m::LSModel, worker::LSWorker, shocks, t)
@@ -178,19 +186,19 @@ function pay_taxes(m::LSModel, worker::LSWorker)
     end
 end
 
-struct Shocks{MI <: AbstractMatrix{<:Integer}, MF <: AbstractMatrix{<:AbstractFloat}}
-    death::MF
-    arrival::MF
-    separation::MF
-    offer_idxs::MI
+@concrete struct LSShocks
+    death # matrix (N, T)
+    arrival # matrix (N, T)
+    separation # matrix (N, T)
+    offer_idxs # matrix (N, T)
 end
 
-function Shocks(m::LSModel, N = 10_000, T = 100; burn_in = 100)
+function LSShocks(m::LSModel, N = 10_000, T = 100; burn_in = 100)
     death_shocks = rand(N, T + burn_in)
     arrival_shocks = rand(N, T + burn_in)
     separation_shocks = rand(N, T + burn_in)
     offer_idxs = sample(1:m.p.w_N, Weights(m.p.f_grid), (N, T + burn_in))
-    return Shocks(death_shocks, arrival_shocks, separation_shocks, offer_idxs)
+    return LSShocks(death_shocks, arrival_shocks, separation_shocks, offer_idxs)
 end
 
 function simulate_budget_surplus(m::LSModel, shocks, N, T; burn_in)
@@ -214,10 +222,11 @@ end
 
 function solve!(m::LSModel;
     N = 10_000, T = 100, burn_in = 100,
-    τ_low = 0.0, τ_high = 1.0, tax_tol = 1e-8, vfi_tol = 1e-3, max_iter = 10_000, report_steps = 500, verbose = true)
-    shocks = Shocks(m, N, T; burn_in)
+    τ_guess = 0.5, τ_low = 0.0, τ_high = 1.0, tax_tol = 1e-8, vfi_tol = 1e-3, max_iter = 10_000, report_steps = 500, verbose = true)
+    shocks = LSShocks(m, N, T; burn_in)
+    m.τ = τ_guess
+    u_rate = 0.0
     for iter in 1:max_iter
-        m.τ = (τ_low + τ_high) / 2
         solve_value_functions!(m; tol = vfi_tol, max_iter, report_steps)
         surplus, u_rate = simulate_budget_surplus(m, shocks, N, T; burn_in)
 
@@ -237,6 +246,7 @@ function solve!(m::LSModel;
         elseif iter == max_iter
             println("Failed to converge!")
         end
+        m.τ = (τ_low + τ_high) / 2
     end
-    return 
+    return m.τ, u_rate
 end

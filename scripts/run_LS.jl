@@ -2,13 +2,15 @@ using Pkg
 Pkg.activate(@__DIR__)
 using EconModels
 using Plots
+using BenchmarkTools
 
-p = LSParams(; Δ = 1, w_N = 41, s_N = 41, h_N = 201)
+p = LSParams()
 m = LSModel(p)
 
-@time solve!(m;
+EconModels.solve!(m;
     N = 10_000, T = 100, burn_in = 100,
-    tax_tol = 1e-8,
+    τ_guess = 0.1,
+    tax_tol = 1e-9,
     vfi_tol = 1e-3,
     max_iter = 10_000,
     report_steps = 500,
@@ -39,3 +41,8 @@ m = LSModel(p)
 # )
 
 # display(plt)
+
+# Benchmarking
+# p = LSParams()
+# m = LSModel(p)
+# time = @belapsed solve!(x; τ_guess=0.1, verbose=false) setup = (x = deepcopy($m))
