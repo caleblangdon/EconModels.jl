@@ -1,5 +1,5 @@
 abstract type DMPParams <: Params end
-abstract type DMPModel{P <: DMPParams} <: Model end
+abstract type DMPModel <: Model end
 
 using ConcreteStructs
 using NLsolve
@@ -7,19 +7,7 @@ using QuantEcon
 using Roots
 using StatsBase
 using Tullio
-
-match_from_unemployment(match, θ) = match(1, θ)
-match_from_vacancy(match, θ) = match(θ^-1, 1)
-
-@kwdef @concrete struct CobbDouglas
-    φ = 0.5
-    α = 0.5
-end
-
-(match::CobbDouglas)(u, v) = match.φ*u^match.α*v^(1-match.α)
-match_from_unemployment(match::CobbDouglas, θ) = match.φ*θ^(1-match.α)
-match_from_vacancy(match::CobbDouglas, θ) = match.φ*θ^-match.α
-
+using UnPack
 
 @concrete terse struct SteadyStateDMPParams <: DMPParams
     β
@@ -40,7 +28,7 @@ function SteadyStateDMPParams(;
     b = 0.4,
     δ = 0.04,
     κ = 0.5,
-    M = CobbDouglas(; φ = 0.5, α = 0.5),
+    M = CobbDouglas([0.5, 0.5]; tfp = 0.5),
     )
 
     f(θ) = match_from_unemployment(M, θ)
@@ -49,7 +37,7 @@ function SteadyStateDMPParams(;
     return SteadyStateDMPParams(β, μ, z, b, δ, κ, M, f, q)
 end
 
-@concrete terse mutable struct SteadyStateDMPModel{P <: SteadyStateDMPParams} <: DMPModel{P}
+@concrete terse mutable struct SteadyStateDMPModel{P <: SteadyStateDMPParams} <: DMPModel
     p::P
     u
     w
@@ -70,7 +58,7 @@ function solve!(m::SteadyStateDMPModel)
     @unpack u, w, θ, J = m
     F(θ) = κ*(1-β*(1-δ)) - q(θ)*β*((1-μ)*(z-b)-κ*μ*θ)
     # F(θ) = κ - β*q(θ)*((1-μ)*(z-b) - μ*κ*θ + (1-δ)*κ/q(θ))
-    θ = find_zero(F, (0.0, 10.0))
+    θ = find_zero(F, θ)
     u = δ / (δ + f(θ))
     w = μ*z + (1-μ)*b + μ*κ*θ
     J = (z-w) / (1-β*(1-δ))
@@ -100,10 +88,10 @@ function StochasticDMPParams(;
     b = 0.4,
     δ = 0.04,
     κ = 0.5,
-    M = CobbDouglas(; φ = 0.5, α = 0.5),
+    M = CobbDouglas([0.5, 0.5]; tfp = 0.5),
     z_N = 7,
     z_ρ = 0.9,
-    z_σ = 0.1,
+    z_σ = 0.01,
     )
 
     f(θ) = match_from_unemployment(M, θ)
@@ -115,7 +103,7 @@ function StochasticDMPParams(;
     return StochasticDMPParams(β, μ, b, δ, κ, M, f, q, z_N, z_grid, z_Π)
 end
 
-@concrete terse mutable struct StochasticDMPModel{P <: StochasticDMPParams} <: DMPModel{P}
+@concrete terse mutable struct StochasticDMPModel{P <: StochasticDMPParams} <: DMPModel
     p::P
     u # contains steady state u values corresponding to z's
     w
