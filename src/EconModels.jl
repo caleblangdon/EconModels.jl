@@ -9,6 +9,7 @@ using Optim
 using Plots
 using ProgressMeter
 using QuantEcon
+using SparseArrays
 using Statistics
 using StatsBase
 using Tullio
@@ -45,11 +46,10 @@ export DMPParams, DMPModel
 export SteadyStateDMPParams, SteadyStateDMPModel, StochasticDMPParams, StochasticDMPModel
 include("DMP.jl")
 
-function test_func()
-    println("Test 10")
-end
-export test_func
+export ShimerParams, ShimerModel
+include("Shimer.jl")
 
-export solve!, simulate_moments
+
+export solve!, simulate_moments, simulate_unemployment
 
 end
