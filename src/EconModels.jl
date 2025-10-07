@@ -28,6 +28,8 @@ abstract type EstimationProcedure end
 # solve!(m)
 
 parameters(m::Model) = m.p
+include("common_functions.jl")
+export CobbDouglas, CES, DHRW, CRRA, marginal
 
 
 include("GGV.jl")
